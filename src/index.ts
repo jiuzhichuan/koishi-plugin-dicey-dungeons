@@ -159,8 +159,10 @@ ctx.model.extend('dice_group', {
     .action(async ({session})=>{
       const {userId,guildId} = session;
       const dice_group = await ctx.database.get('dice_group',{guildId});
+      const dice_player = await ctx.database.get('dice_player',{userId});
       const dice_player_1 = await ctx.database.get('dice_player',{userId:dice_group?.[0]?.Play_1_userId});
       const dice_player_2 = await ctx.database.get('dice_player',{userId:dice_group?.[0]?.Play_2_userId});
+      const player = dice_group?.[0]?.Play_1_userId == userId ? dice_group?.[0]?.Play_2_userId : dice_group?.[0]?.Play_1_userId;
       if(dice_group?.[0]?.game_status != 2){
         return `游戏还没开始`
       }else if (dice_group?.[0]?.bout != userId){
@@ -170,12 +172,8 @@ ctx.model.extend('dice_group', {
       }else if(dice_player_2?.[0]?.HP <= 0){
         return await 血量判定(ctx,dice_group?.[0]?.Play_2_userId,guildId)
       }else{
-        // $写 骰子地下城/%群号%/设置 轮到 [3-%t%]$
-        // $回调 重置玩家[3-%t%]次数$
-        // $回调 生成玩家[3-%t%]骰子$
-        // $写 骰子地下城/%群号%/玩家%t% 状态诅咒 0$
-        // \n装备和骰子已刷新
-        // $调用 1000 玩家信息$
+        await ctx.database.set('dice_group',{guildId},{bout:player})
+        return `接下来轮到\n${player}\n装备和骰子已刷新` + await 中毒判定(ctx,userId),Reset_times(ctx,player),Generate_Dice(ctx,player)
       }
     })
   ctx.command('骰子地下城')
