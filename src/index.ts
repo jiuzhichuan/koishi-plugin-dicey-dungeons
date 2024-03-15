@@ -1,5 +1,5 @@
 import { SrvRecord } from 'dns';
-import { Context, Schema,Random, renameProperty } from 'koishi'
+import { Context, Schema,Random, renameProperty, defineConfig } from 'koishi'
 
 export const name = 'dicey-dungeons'
 
@@ -7,19 +7,19 @@ const random = new Random(() => Math.random());
 
 
 const Introduction = {
-  "剑": {descriptions:"造成□伤害",austerity:3,dice:'',quantities:1,Category:['造成']},
-  "匕首": {descriptions:"[1-3]造成□伤害",austerity:1,dice:'1-3',quantities:9,Category:['造成']},
-  "回旋镖": {descriptions:"造成□*2伤害,自身受到□伤害",austerity:3,quantities:1,Category:['造成','自身']},
-  "火球": {descriptions:"[偶数]造成□伤害,燃烧1个骰子",austerity:2,dice:'偶数',quantities:1,Category:['造成','燃烧']},
-  "雪球": {descriptions:"[奇数]造成□伤害,冰冻1个骰子",austerity:2,dice:'奇数',quantities:1,Category:['造成','冰冻']},
-  "诅咒": {descriptions:"[1]造成□+1伤害，施加1层诅咒",austerity:0,dice:1,quantities:1,Category:['造成','诅咒']},
-  "毒药咒语": {descriptions:"[3]施加4层中毒",austerity:0,dice:3,quantities:1,Category:['诅咒']},
-  "治愈水晶": {descriptions:"[1-3]回复□生命值",austerity:1,dice:'1-3',quantities:1,Category:['回复']},
-  "木质盾牌": {descriptions:"[1-4]获得□点护盾",austerity:1,dice:'1-3',quantities:1,Category:['护盾']},
-  "复制": {descriptions:"[4-6]复制1个骰子",austerity:1,dice:'4-6',quantities:1,Category:['复制']},
-  "铲": {descriptions:"颠倒1个骰子",austerity:3,dice:'',quantities:1,Category:['颠倒']},
-  "绝佳手气": {descriptions:"[1-5]重投1个点数更大的骰子",austerity:1,dice:'1-5',quantities:1,Category:['重投更大']},
-  "战斗翻滚": {descriptions:"重投1个骰子(3次)",austerity:3,dice:'',quantities:3,Category:['重投']}
+  "剑": {descriptions:"造成□伤害",austerity:3,dice:'',quantities:1,harm:'□',Category:['造成']},
+  "匕首": {descriptions:"[1-3]造成□伤害",austerity:1,dice:'1-3',quantities:9,harm:'□',Category:['造成']},
+  "回旋镖": {descriptions:"造成□*2伤害,自身受到□伤害",austerity:3,quantities:1,harm:'□*2',Category:['造成','自身']},
+  "火球": {descriptions:"[偶数]造成□伤害,燃烧1个骰子",austerity:2,dice:'偶数',quantities:1,harm:'□',Category:['造成','燃烧']},
+  "雪球": {descriptions:"[奇数]造成□伤害,冰冻1个骰子",austerity:2,dice:'奇数',quantities:1,harm:'□',Category:['造成','冰冻']},
+  "诅咒": {descriptions:"[1]造成□+1伤害，施加1层诅咒",austerity:0,dice:1,quantities:1,harm:'□+1',Category:['造成','诅咒']},
+  "毒药咒语": {descriptions:"[3]施加4层中毒",austerity:0,dice:3,quantities:1,harm:'□',Category:['诅咒']},
+  "治愈水晶": {descriptions:"[1-3]回复□生命值",austerity:1,dice:'1-3',quantities:1,harm:'□',Category:['回复']},
+  "木质盾牌": {descriptions:"[1-4]获得□点护盾",austerity:1,dice:'1-3',quantities:1,harm:'□',Category:['护盾']},
+  "复制": {descriptions:"[4-6]复制1个骰子",austerity:1,dice:'4-6',quantities:1,harm:'□',Category:['复制']},
+  "铲": {descriptions:"颠倒1个骰子",austerity:3,dice:'',quantities:1,harm:'□',Category:['颠倒']},
+  "绝佳手气": {descriptions:"[1-5]重投1个点数更大的骰子",austerity:1,dice:'1-5',quantities:1,harm:'□',Category:['重投更大']},
+  "战斗翻滚": {descriptions:"重投1个骰子(3次)",austerity:3,dice:'',quantities:3,harm:'□',Category:['重投']}
 };
 
 export interface Config {}
@@ -48,7 +48,7 @@ export interface player{
   dice : string[]; // [⚀,⚁,⚂,⚃,⚄,⚅]
   skills: string[]; //技能列表[]
   skill: object; // 技能{}
-  counterparties:string;
+  counterparties:string; //对手
   burn:number;  //燃烧
   freeze:number; //冰冻
   poison:number; // 中毒
@@ -128,7 +128,7 @@ ctx.model.extend('dice_group', {
       const read = await ctx.database.get('dice_group',{guildId})
       if( read?.[0]?.game_status == 0 ||!read?.[0]?.game_status){
         await ctx.database.create('dice_group',{guildId,Play_1_userId:userId,game_status:1})
-        return `══骰子地下城══\n游戏准备中\n玩家1：${userId}\n玩家2:暂缺\nTips：发送‘加入游戏’即可加入`
+        return `══骰子地下城══\n游戏准备中\n玩家1：${userId}\n玩家2:暂缺\nTips：发送‘加入对战’即可加入`
       }else{
         return `══骰子地下城══\n游戏已经${game_status[read?.[0]?.game_status]}\n请等待`
       }
@@ -150,8 +150,10 @@ ctx.model.extend('dice_group', {
     .subcommand('重置对战')
     .action(async ({session})=>{
       const {userId,guildId} = session;
+      const dice_group = await ctx.database.get('dice_group',{guildId});
       await ctx.database.remove('dice_group',{guildId})
-      await ctx.database.remove('dice_player',{userId})
+      await ctx.database.remove('dice_player',{userId:dice_group?.[0]?.Play_1_userId});
+      await ctx.database.remove('dice_player',{userId:dice_group?.[0]?.Play_2_userId})
       return `══骰子地下城══\n->重置对战成功`
     })
   ctx.command('骰子地下城')
@@ -173,7 +175,9 @@ ctx.model.extend('dice_group', {
         return await 血量判定(ctx,dice_group?.[0]?.Play_2_userId,guildId)
       }else{
         await ctx.database.set('dice_group',{guildId},{bout:player})
-        return `接下来轮到\n${player}\n装备和骰子已刷新` + await 中毒判定(ctx,userId),状态判定(ctx,userId),Reset_times(ctx,player),Generate_Dice(ctx,player)
+        await Reset_times(ctx,player)
+        await Generate_Dice(ctx,player)
+        return `接下来轮到\n${player}\n装备和骰子已刷新${await 中毒判定(ctx,userId)}${await 状态判定(ctx,userId)}`
       }
     })
   ctx.command('骰子地下城')
@@ -215,7 +219,7 @@ ctx.model.extend('dice_group', {
         return `══骰子地下城══\n还没开始对战呢`
       }else if(dice_group?.[0]?.bout != userId ){
         return `══骰子地下城══\n还不是你的回合哦`
-      }else if( Number(dice_player?.[0]?.skill?.[Number(props) - 1]) >= 0){ // 判断装备是否小于等于0
+      }else if( Number(dice_player?.[0]?.skill?.[prop]) <= 0){ // 判断装备是否小于等于0
         return `══骰子地下城══\n这个装备次数已用完`
       }else if( !dice_player?.[0]?.dice.includes(dice) ){
         return `══骰子地下城══\n你没有这个骰子`
@@ -225,18 +229,18 @@ ctx.model.extend('dice_group', {
         return `══骰子地下城══\n骰子不符合装备，无法使用`
       }else if(await 诅咒判定(ctx,userId) == true){
         return `诅咒生效！骰子使用失败`
-      }else{
+      }else if(/^[0-9]+$/.test(dice)&& /^[0-9]+$/.test(props)){
         const skill = dice_player?.[0]?.skill;
         const dices = dice_player?.[0]?.dice;
-        dices.splice(dice.indexOf(dice),1);
-        skill[prop] - 1;
-        await ctx.database.set('dice_player',{userId},{skill,dice:dices})
-        return await Introduction[prop].Category.filter(a =>{
-            return eval(a)(ctx, userId, dice, Introduction[prop].harm);
-          })
+        let msg = '';
+        dices.splice(dices.indexOf(dice),1);
+        (skill[prop] -= 1);
+        await ctx.database.set('dice_player',{userId},{skill,dice:dices});
+        await Introduction[prop].Category.filter(async a =>{
+          msg = eval(a)(ctx,userId,dice,Introduction[prop].harm);})
+        return msg
       }
     })
-
 }
 async function 血量判定(ctx,userId,guildId) {
   const dice_player = await ctx.database.get('dice_player',{userId});
@@ -246,7 +250,7 @@ async function 血量判定(ctx,userId,guildId) {
     await ctx.database.remove('dice_player',{userId})
     return `${userId}\n血量清零\n${ userId != dice_group?.[0]?.Play_1_userId ? dice_group?.[0]?.Play_1_userId : dice_group?.[0]?.Play_2_userId}获胜`
   }else{
-    return
+    return ''
   }
 }
 async function 诅咒判定(ctx,userId) {
@@ -265,7 +269,7 @@ async function 中毒判定(ctx,userId) {
     await ctx.database.set('dice_player',{userId},{HP:dice_player?.[0]?.HP - dice_player?.[0]?.poison,poison:dice_player?.[0]?.poison - 1})
     return `中毒 血量-${dice_player?.[0]?.poison}`
   }else{
-    return
+    return ''
   }
 }
 async function 状态判定(ctx,userId) {
@@ -279,6 +283,8 @@ async function 状态判定(ctx,userId) {
   const a = dices.map((element, index) => (index < dice_player?.[0]?.burn ? 1 : element));
   await ctx.database.set('dice_player',{userId},{dice:a})
   return `冰冻${dice_player?.[0]?.burn}骰子`
+  }else{
+    return ''
   }
 }
 async function 颠倒(ctx,userId,dice,harm) {
@@ -334,42 +340,23 @@ async function 中毒(ctx,userId,dice,harm = '') {
   await ctx.database.set('dice_player',{userId},{poison:dice_player?.[0]?.poison + 4})
   return `中毒*1`
 }
-/**
- * 回复生命调用函数
- */
 async function 回复(ctx,userId,dice,harm = '') {
   const dice_player = await ctx.database.get('dice_player',{userId});
   const a = dice + dice_player?.[0]?.HP;
   await ctx.database.set('dice_player',{userId},{HP:(a >= 50 ? 50 : a)})
   return `回复${a}生命值\n`
 }
-/**
- * 造成伤害调用函数
- * @param ctx 上下文
- * @param userId 用户id
- * @param dice 点数
- * @param harm 伤害
- * @returns 返回造成伤害
- */
 async function 造成(ctx,userId,dice,harm){
   const dice_player = await ctx.database.get('dice_player',{userId});
   const dice_player_2 = await ctx.database.get('dice_player',{userId:dice_player?.[0]?.counterparties})
   const new_hanrm = eval(harm.replace("□",dice));
   if(dice_player_2?.[0]?.shield <= 0){
-    await ctx.database.set('dice_player',{userId:dice_player?.[0]?.counterparties},{HP:dice_player_2?.[0]?.HP - new_hanrm})
+    await ctx.database.set('dice_player',{userId:dice_player?.[0]?.counterparties},{HP:dice_player_2?.[0]?.HP - new_hanrm});
     return `\n造成${new_hanrm}伤害`
   }else{
     return await 护盾判定(ctx,dice_player?.[0]?.counterpartiesm,new_hanrm)
   }
 }
-/**
- * 自身伤害调用函数
- * @param ctx 上下文
- * @param userId 用户id
- * @param dice 点数
- * @param harm 伤害
- * @returns 返回自身造成伤害
- */
 async function 自身(ctx,userId,dice,harm) {
   const dice_player = await ctx.database.get('dice_player',{userId});
   const new_hanrm = eval(harm.replace("□",dice));
@@ -380,13 +367,6 @@ async function 自身(ctx,userId,dice,harm) {
     return await 护盾判定(ctx,userId,new_hanrm)
   }
 }
-/**
- * 护盾判定函数
- * @param ctx 上下文
- * @param userId 用户id
- * @param harm 伤害
- * @returns 显示护盾抵挡的具体伤害
- */
 async function 护盾判定(ctx,userId,harm) {
   const dice_player = await ctx.database.get('dice_player',{userId});
   if(dice_player?.[0]?.shield >= harm){
@@ -518,10 +498,13 @@ async function Dice_Decision(Decision:number,dice_a,dice_b){
   // 1 表示只能投出指定范围内的点数，如 [1-5] 表示只能投出点数在 1 到 5 之间的骰子;
   // 2 表示只能投出奇数或偶数的点数，例如 [奇数] [偶数] 表示只能投出奇数或偶数的点数;
   // 3代表无任何约束只需要任意点数即可.
+  console.log(Decision,dice_a,dice_b)
   if(Decision == 0 && dice_a == dice_b){
     return true;
-  }else if(Decision == 1 && dice_a > dice_b.split('-')[0] && dice_a < dice_b.split('-')[1]){
-    return true;
+  }else if(Decision == 1){
+    if( Number(dice_a) <= Number(dice_b.split('-')[0]) && Number(dice_a) >= Number(dice_b.split('-')[1])){
+      return true;
+    }
   }else if(Decision == 2 ){
     if(dice_b == '偶数' && dice_a % 2 == 0){
       return true;
