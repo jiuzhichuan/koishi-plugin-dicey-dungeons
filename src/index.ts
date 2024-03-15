@@ -173,7 +173,7 @@ ctx.model.extend('dice_group', {
         return await 血量判定(ctx,dice_group?.[0]?.Play_2_userId,guildId)
       }else{
         await ctx.database.set('dice_group',{guildId},{bout:player})
-        return `接下来轮到\n${player}\n装备和骰子已刷新` + await 中毒判定(ctx,userId),Reset_times(ctx,player),Generate_Dice(ctx,player)
+        return `接下来轮到\n${player}\n装备和骰子已刷新` + await 中毒判定(ctx,userId),状态判定(ctx,userId),Reset_times(ctx,player),Generate_Dice(ctx,player)
       }
     })
   ctx.command('骰子地下城')
@@ -201,7 +201,7 @@ ctx.model.extend('dice_group', {
       const {userId,guildId} = session;
       const dice_group = await ctx.database.get('dice_group',{guildId});
       const dice_player = await ctx.database.get('dice_player',{userId});
-      return `══骰子地下城══\n当前回合：${dice_group?.[0]?.bout}\n➢玩家：${userId}\n血量：${HP(dice_player?.[0]?.HP,50)}\n${Show_equipment(dice_player?.[0]?.skills)}骰子：${Show_Dice(dice_player?.[0]?.dice)}\n状态：${await Display_Status(ctx,userId)}`
+      return `══骰子地下城══\n当前回合：${dice_group?.[0]?.bout}\n➢玩家：${userId}\n血量：${HP(dice_player?.[0]?.HP,50)}\n${Show_equipment(dice_player?.[0]?.skills)}骰子：${Show_Dice(dice_player?.[0]?.dice)}\n状态：${await Display_Status(ctx,userId)}\nTips：->指令：点数 [点数] [装备序号]\n示例：点数 [点数] [装备序号]`
     })
   ctx.command('骰子地下城')
     .subcommand('点数 <dice> <props>')
@@ -223,6 +223,8 @@ ctx.model.extend('dice_group', {
         return `══骰子地下城══\n你没有骰子了，输入【结束回合】`
       }else if(await Dice_Decision(Introduction[prop].austerity,dice,Introduction[prop].dice) == false){
         return `══骰子地下城══\n骰子不符合装备，无法使用`
+      }else if(await 诅咒判定(ctx,userId) == true){
+        return `诅咒生效！骰子使用失败`
       }else{
         const skill = dice_player?.[0]?.skill;
         const dices = dice_player?.[0]?.dice;
@@ -251,9 +253,9 @@ async function 诅咒判定(ctx,userId) {
   const dice_player = await ctx.database.get('dice_player',{userId});
   if(dice_player?.[0]?.curse >= 1 && Random.bool(0.5) == true){
     await ctx.database.set('dice_player',{userId},{curse:dice_player?.[0]?.curse - 1})
-    return `诅咒 骰子失效`
+    return true
   }else{
-    return
+    return false
   }
 }
 async function 中毒判定(ctx,userId) {
